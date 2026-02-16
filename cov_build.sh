@@ -20,6 +20,7 @@ cmake -G Ninja -S "$GITHUB_WORKSPACE" -B build/entservices-monitor \
 -DRDK_SERVICES_L1_TEST=OFF \
 -DDS_FOUND=ON \
 -DPLUGIN_TELEMETRY=ON \
+-DPLUGIN_MONITOR=ON \
 -DCMAKE_CXX_FLAGS="-DEXCEPTIONS_ENABLE=ON \
 -I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers \
 -I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/audiocapturemgr \
