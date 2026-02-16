@@ -108,8 +108,9 @@ if (RDK_SERVICES_L1_TEST)
 endif (RDK_SERVICES_L1_TEST)
 
 include_directories(${TEST_INC})
-
-target_link_directories(${MODULE_NAME} PUBLIC ${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_INSTALL_PREFIX}/lib/wpeframework/plugins)
+if (TEST_SRC)
+    target_link_directories(${MODULE_NAME} PUBLIC ${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_INSTALL_PREFIX}/lib/wpeframework/plugins)
+endif(TEST_SRC)
 
 target_link_libraries(${MODULE_NAME} ${TEST_LIB})
 
