@@ -29,7 +29,10 @@ git clone https://$GITHUB_TOKEN@github.com/rdkcentral/entservices-testframework.
 # Build Thunder-Tools
 echo "======================================================================================"
 echo "buliding thunderTools"
-cd ${GITHUB_WORKSPACE}
+cd ThunderTools
+patch -p1 < $GITHUB_WORKSPACE/entservices-testframework/patches/00010-R4.4-Add-support-for-project-dir.patch
+cd -
+
 cmake -G Ninja -S ThunderTools -B build/ThunderTools \
     -DEXCEPTIONS_ENABLE=ON \
     -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/install/usr" \
