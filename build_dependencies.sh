@@ -93,6 +93,7 @@ echo " Empty mocks creation to avoid compilation errors"
 echo "======================================================================================"
 mkdir -p headers
 mkdir -p headers/proc
+mkdir -p headers/libusb
 echo "dir created successfully"
 echo "======================================================================================"
 
