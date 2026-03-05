@@ -18,6 +18,7 @@
  */
  
 #include "Monitor.h"
+#include <stdio.h>
 
 #define API_VERSION_NUMBER_MAJOR 1
 #define API_VERSION_NUMBER_MINOR 1
@@ -159,7 +160,7 @@ namespace Plugin {
             result->ErrorCode = Web::STATUS_BAD_REQUEST;
             result->Message = _T(" could not handle your request.");
         }
-
+        printf("Test coverity workflow %s\n");
         return (result);
     }
 }
