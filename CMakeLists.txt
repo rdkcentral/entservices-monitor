@@ -59,6 +59,8 @@ if(PLUGIN_MONITOR)
     add_subdirectory(plugin)
 endif()
 
+target_link_libraries(-ltelemetry_msgsender)
+
 if(WPEFRAMEWORK_CREATE_IPKG_TARGETS)
     set(CPACK_GENERATOR "DEB")
     set(CPACK_DEB_COMPONENT_INSTALL ON)
