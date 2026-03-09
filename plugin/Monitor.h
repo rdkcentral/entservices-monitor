@@ -27,6 +27,8 @@
 #include <limits>
 #include <string>
 
+#include <telemetry_busmessage_sender.h>
+
 static uint32_t gcd(uint32_t a, uint32_t b)
 {
     return b == 0 ? a : gcd(b, a % b);
@@ -950,6 +952,11 @@ POP_WARNING()
 
                                 const string message("{\"callsign\": \"" + plugin->Callsign() + "\", \"action\": \"Deactivate\", \"reason\": \"" + why.Data() + "\" }");
                                 SYSLOG(Logging::Fatal, (_T("FORCED Shutdown: %s by reason: %s."), plugin->Callsign().c_str(), why.Data()));
+
+                                if (plugin->Callsign() == "JSPP" && why.Data() == "Failure") {
+                                    std::string value = "FORCED Shutdown: JSPP by reason: Failure.";
+                                    t2_event_s("SYST_INFO_JSPPShutdown", (char*)value.c_str());
+                                }
 
                                 _service->Notify(message);
 
