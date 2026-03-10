@@ -954,8 +954,7 @@ POP_WARNING()
                                 SYSLOG(Logging::Fatal, (_T("FORCED Shutdown: %s by reason: %s."), plugin->Callsign().c_str(), why.Data()));
 
                                 if (plugin->Callsign() == "JSPP" && why.Data() == "Failure") {
-                                    std::string value = "FORCED Shutdown: JSPP by reason: Failure.";
-                                    t2_event_s("SYST_INFO_JSPPShutdown", (char*)value.c_str());
+                                    t2_event_d("SYST_INFO_JSPPShutdown", 1);
                                 }
 
                                 _service->Notify(message);
