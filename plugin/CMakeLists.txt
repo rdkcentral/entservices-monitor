@@ -75,6 +75,7 @@ endif()
 
 find_package(${NAMESPACE}Plugins REQUIRED)
 find_package(CompileSettingsDebug CONFIG REQUIRED)
+find_package(Telemetry)
 
 add_library(${MODULE_NAME} SHARED 
     Monitor.cpp
