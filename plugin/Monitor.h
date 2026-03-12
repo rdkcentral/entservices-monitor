@@ -953,7 +953,13 @@ POP_WARNING()
                                 const string message("{\"callsign\": \"" + plugin->Callsign() + "\", \"action\": \"Deactivate\", \"reason\": \"" + why.Data() + "\" }");
                                 SYSLOG(Logging::Fatal, (_T("FORCED Shutdown: %s by reason: %s."), plugin->Callsign().c_str(), why.Data()));
 
-                                if (plugin->Callsign() == "JSPP" && why.Data() == "Failure") {
+                                auto callsign = plugin->Callsign();
+                                auto reason   = why.Data();
+                                
+                                if (callsign && reason &&
+                                    std::string(callsign) == "JSPP" &&
+                                    std::string(reason) == "Failure") {
+                                
                                     t2_event_d("SYST_INFO_JSPPShutdown", 1);
                                 }
 
