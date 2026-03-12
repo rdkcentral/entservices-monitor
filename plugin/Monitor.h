@@ -956,7 +956,7 @@ POP_WARNING()
                                 auto callsign = plugin->Callsign();
                                 auto reason   = why.Data();
                                 
-                                if (callsign && reason &&
+                                if (!callsign.empty() && reason &&
                                     std::string(callsign) == "JSPP" &&
                                     std::string(reason) == "Failure") {
                                 
