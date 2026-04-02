@@ -634,7 +634,10 @@ namespace Plugin {
 
                             if ((_memoryThreshold != 0) && (resident > _memoryThreshold)) {
                                 status |= EXCEEDED_MEMORY;
-                                TRACE(Trace::Error, (_T("Status MetaData Exceeded. %d"), __LINE__));
+                                TRACE(Trace::Error, (_T("MEMORY EXCEEDED: resident=%llu bytes > threshold=%llu bytes (delta=%llu bytes)"),
+                                    static_cast<unsigned long long>(resident),
+                                    static_cast<unsigned long long>(_memoryThreshold),
+                                    static_cast<unsigned long long>(resident - _memoryThreshold)));
                             }
                             _memorySlots = _memoryInterval;
                         }
@@ -793,6 +796,10 @@ POP_WARNING()
                     index->second.Active(false);
 
                     PluginHost::IShell::reason reason = service->Reason();
+                    SYSLOG(Logging::Notification, (_T("Monitor: Plugin '%s' deinitialized. Reason: %s, HasRestartAllowed: %s"),
+                        callsign.c_str(),
+                        Core::EnumerateType<PluginHost::IShell::reason>(reason).Data(),
+                        index->second.HasRestartAllowed() ? "YES" : "NO"));
 
                     if ((index->second.HasRestartAllowed() == true) && ((reason == PluginHost::IShell::MEMORY_EXCEEDED) || (reason == PluginHost::IShell::FAILURE))) {
                         if (index->second.RegisterRestart(reason) == false) {
@@ -803,11 +810,15 @@ POP_WARNING()
                             _service->Notify(message);
                             _parent.event_action(callsign, "StoppedRestaring", std::to_string(index->second.RestartLimit()) + " attempts failed within the restart window");
                         } else {
-                            const string message("{\"callsign\": \"" + callsign + "\", \"action\": \"Activate\", \"reason\": \"Automatic\" }");
-                            _service->Notify(message);
-                            _parent.event_action(callsign, "Activate", "Automatic");
-                            TRACE(Trace::Error, (_T("Restarting %s again because we detected it misbehaved."), callsign.c_str()));
-                            Core::IWorkerPool::Instance().Submit(PluginHost::IShell::Job::Create(service, PluginHost::IShell::ACTIVATED, PluginHost::IShell::AUTOMATIC));
+                            if (callsign == "org.rdk.NetworkManager") {
+                                TRACE(Trace::Warning, (_T("Skipping restart of %s (reason: %s) - NetworkManager restart is not allowed."), callsign.c_str(), Core::EnumerateType<PluginHost::IShell::reason>(reason).Data()));
+                            } else {
+                                const string message("{\"callsign\": \"" + callsign + "\", \"action\": \"Activate\", \"reason\": \"Automatic\" }");
+                                _service->Notify(message);
+                                _parent.event_action(callsign, "Activate", "Automatic");
+                                TRACE(Trace::Error, (_T("Restarting %s again because we detected it misbehaved. Reason: %s"), callsign.c_str(), Core::EnumerateType<PluginHost::IShell::reason>(reason).Data()));
+                                Core::IWorkerPool::Instance().Submit(PluginHost::IShell::Job::Create(service, PluginHost::IShell::ACTIVATED, PluginHost::IShell::AUTOMATIC));
+                            }
                         }
                     } 
                 }
@@ -950,26 +961,36 @@ POP_WARNING()
                             if (plugin != nullptr) {
                                 Core::EnumerateType<PluginHost::IShell::reason> why(((value & MonitorObject::EXCEEDED_MEMORY) != 0) ? PluginHost::IShell::MEMORY_EXCEEDED : PluginHost::IShell::FAILURE);
 
-                                const string message("{\"callsign\": \"" + plugin->Callsign() + "\", \"action\": \"Deactivate\", \"reason\": \"" + why.Data() + "\" }");
-                                SYSLOG(Logging::Fatal, (_T("FORCED Shutdown: %s by reason: %s."), plugin->Callsign().c_str(), why.Data()));
+                                SYSLOG(Logging::Fatal, (_T("Monitor Dispatch: %s triggered deactivation. Reason: %s (evaluation=0x%02X, NOT_OPERATIONAL=%s, EXCEEDED_MEMORY=%s)"),
+                                    plugin->Callsign().c_str(), why.Data(), value,
+                                    ((value & MonitorObject::NOT_OPERATIONAL) != 0) ? "YES" : "NO",
+                                    ((value & MonitorObject::EXCEEDED_MEMORY) != 0) ? "YES" : "NO"));
 
-                                auto callsign = plugin->Callsign();
-                                auto reason   = why.Data();
-                                
-                                if (!callsign.empty() && reason &&
-                                    std::string(callsign) == "JSPP" &&
-                                    std::string(reason) == "Failure") {
-                                
-                                    t2_event_d("SYST_INFO_JSPPShutdown", 1);
+                                if (std::string(plugin->Callsign()) == "org.rdk.NetworkManager") {
+                                    SYSLOG(Logging::Fatal, (_T("Monitor: SKIPPING forced shutdown of org.rdk.NetworkManager (reason: %s). NetworkManager must not be killed by Monitor."), why.Data()));
+                                    plugin->Release();
+                                } else {
+                                    const string message("{\"callsign\": \"" + plugin->Callsign() + "\", \"action\": \"Deactivate\", \"reason\": \"" + why.Data() + "\" }");
+                                    SYSLOG(Logging::Fatal, (_T("FORCED Shutdown: %s by reason: %s."), plugin->Callsign().c_str(), why.Data()));
+
+                                    auto callsign = plugin->Callsign();
+                                    auto reason   = why.Data();
+                                    
+                                    if (!callsign.empty() && reason &&
+                                        std::string(callsign) == "JSPP" &&
+                                        std::string(reason) == "Failure") {
+                                    
+                                        t2_event_d("SYST_INFO_JSPPShutdown", 1);
+                                    }
+
+                                    _service->Notify(message);
+
+                                    _parent.event_action(plugin->Callsign(), "Deactivate", why.Data());
+
+                                    Core::IWorkerPool::Instance().Submit(PluginHost::IShell::Job::Create(plugin, PluginHost::IShell::DEACTIVATED, why.Value()));
+
+                                    plugin->Release();
                                 }
-
-                                _service->Notify(message);
-
-                                _parent.event_action(plugin->Callsign(), "Deactivate", why.Data());
-
-                                Core::IWorkerPool::Instance().Submit(PluginHost::IShell::Job::Create(plugin, PluginHost::IShell::DEACTIVATED, why.Value()));
-
-                                plugin->Release();
                             }
                         }
                         info.Retrigger(scheduledTime);
