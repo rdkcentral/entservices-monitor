@@ -16,8 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ###
-
-cmake_minimum_required(VERSION 3.3)
+cmake_minimum_required(VERSION 3.16)
+project(Monitor)
 
 find_package(WPEFramework)
 
@@ -29,11 +29,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
 set(PRODUCT_CONFIG_DIR "/etc/entservices")
 
 option(COMCAST_CONFIG "Comcast services configuration" ON)
-if(COMCAST_CONFIG)
-    include(services.cmake)
-endif()
-
-option(PLUGIN_OCICONTAINER "Include OCIContainer plugin" OFF)
+option(BUILD_ENABLE_TELEMETRY_LOGGING "Enable Telemetry logging using t2 telemetry" OFF)
 
 # Library installation section
 string(TOLOWER ${NAMESPACE} STORAGE_DIRECTORY)
@@ -41,23 +37,7 @@ string(TOLOWER ${NAMESPACE} STORAGE_DIRECTORY)
 # for writing pc and config files
 include(CmakeHelperFunctions)
 
-if(RDK_SERVICE_L2_TEST)
-    add_subdirectory(Tests/L2Tests)
-endif()
-
-option(DISABLE_SECURITY_TOKEN "Disable security token" OFF)
-
-if(RDK_SERVICES_L1_TEST)
-    add_subdirectory(Tests/L1Tests)
-endif()
-
-if(DISABLE_SECURITY_TOKEN)
-    add_definitions(-DDISABLE_SECURITY_TOKEN)
-endif()
-
-if(PLUGIN_MONITOR)
-    add_subdirectory(plugin)
-endif()
+add_subdirectory(plugin)
 
 if(WPEFRAMEWORK_CREATE_IPKG_TARGETS)
     set(CPACK_GENERATOR "DEB")

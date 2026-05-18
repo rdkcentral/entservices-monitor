@@ -17,19 +17,19 @@
 
 # - Try to find Telemetry library
 # Once done this will define
-#  TELEMETRY_FOUND - System has Telemetry
-#  TELEMETRY_LIBRARIES - The libraries needed to use Telemetry
-#  TELEMETRY_INCLUDE_DIRS - The headers needed to use Telemetry
+#  Telemetry_FOUND - System has Telemetry
+#  Telemetry_LIBRARIES - The libraries needed to use Telemetry
+#  Telemetry_INCLUDE_DIRS - The headers needed to use Telemetry
 
 find_package(PkgConfig)
 
-find_library(TELEMETRY_LIBRARIES NAMES telemetry_msgsender)
-find_path(TELEMETRY_INCLUDE_DIRS NAMES telemetry_busmessage_sender.h)
+find_library(Telemetry_LIBRARIES NAMES telemetry_msgsender)
+find_path(Telemetry_INCLUDE_DIRS NAMES telemetry_busmessage_sender.h)
 
 include(FindPackageHandleStandardArgs)
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(TELEMETRY DEFAULT_MSG TELEMETRY_INCLUDE_DIRS TELEMETRY_LIBRARIES)
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(Telemetry DEFAULT_MSG Telemetry_INCLUDE_DIRS Telemetry_LIBRARIES)
 
 mark_as_advanced(
-    TELEMETRY_FOUND
-    TELEMETRY_INCLUDE_DIRS
-    TELEMETRY_LIBRARIES)
+    Telemetry_FOUND
+    Telemetry_INCLUDE_DIRS
+    Telemetry_LIBRARIES)

@@ -38,21 +38,11 @@ END_INTERFACE_MAP
 
 ### Requirement
 
-All Thunder services must be registered using the SERVICE_REGISTRATION macro with name, major, minor and patch versions of service. Register the service using the following macro:
+Thunder plugins require different service registration depending on whether they run in-process or out-of-process:
 
-```
-SERVICE_REGISTRATION(ServiceName, MAJOR, MINOR, PATCH)
-```
+#### In-Process Plugin (Main Plugin Library)
 
-For better readability, it is always good to define the following plugin metadata which is not mandatory:
-
-- **Precondition** - List of Thunder subsystems that must be active in order for the plugin to activate. This can also be set in Plugin.conf.in file.
-
-- **Terminations** - List of Thunder subsystems that will cause the plugin to deactivate if they are marked inactive whilst the plugin is running.
-
-- **Controls** - List of the subsystems that are controlled by the plugin.
-
-### Example
+**REQUIRED**: Register using `Plugin::Metadata` template in the main plugin file (e.g., `PluginName.cpp`).
 
 ```cpp
 namespace WPEFramework {
@@ -66,13 +56,30 @@ namespace WPEFramework {
             {}  // Controls
         );
     }
+}
+```
 
+The plugin metadata can also contain additional information which is not mandatory:
+
+- **Precondition** - List of Thunder subsystems that must be active in order for the plugin to activate. This can also be set in Plugin.conf.in file.
+
+- **Terminations** - List of Thunder subsystems that will cause the plugin to deactivate if they are marked inactive whilst the plugin is running.
+
+- **Controls** - List of the subsystems that are controlled by the plugin.
+
+#### Out-of-Process Plugin (Implementation Library)
+
+**REQUIRED**: Register using `SERVICE_REGISTRATION` macro in the implementation file (e.g., `PluginNameImplementation.cpp`).
+
+```cpp
+namespace WPEFramework {
     namespace Plugin {
-        // Register HdcpProfile service with Thunder
-        SERVICE_REGISTRATION(HdcpProfile,API_VERSION_NUMBER_MAJOR,API_VERSION_NUMBER_MINOR,API_VERSION_NUMBER_PATCH);
+        SERVICE_REGISTRATION(HdcpProfile, API_VERSION_NUMBER_MAJOR, API_VERSION_NUMBER_MINOR, API_VERSION_NUMBER_PATCH);
     }
 }
 ```
+
+**Note**: Only one type of registration should be present in each part. Having both `Plugin::Metadata` and `SERVICE_REGISTRATION` in the same file is uncommon and typically unnecessary, though not a critical error.
 
 ### JSON-RPC Stub Registration
 
@@ -113,7 +120,7 @@ RDKShell::RDKShell()
 
 ### Requirement
 
-- If the plugin runs as out-of-process, then it should implement RPC::IRemoteConnection::"INotification interface inside your plugin.
+- If the plugin runs as out-of-process, then it should implement RPC::IRemoteConnection::INotification interface inside your plugin.
 
 ### Example
 

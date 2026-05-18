@@ -1,0 +1,16 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4e0e809..e862a00 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -59,9 +59,11 @@ target_include_directories(${Target} PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_S
+                                              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/apis>)
+ 
+ foreach(dir ${INTERFACE_DIRS})
++    if (IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${dir}")
+     target_include_directories(${Target} PRIVATE 
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/${dir}>
+ )
++    endif()
+ endforeach()
+ 
+ target_link_libraries(${Target}

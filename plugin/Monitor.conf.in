@@ -1,3 +1,5 @@
+# Use callsign "Monitor" for backwards compatibility.
+callsign = "Monitor"
 autostart = "@PLUGIN_MONITOR_AUTOSTART@"
 startuporder = "@PLUGIN_MONITOR_STARTUPORDER@"
 
@@ -123,16 +125,6 @@ if boolean("@PLUGIN_MONITOR_OPENCDMI@"):
     observable_config.add("restart", restart_config)
     observable_list.append(observable_config)
 
-if boolean("@PLUGIN_MONITOR_TEXTTOSPEECH@"):
-    observable_config = JSON()
-    observable_config.add("callsign", "org.rdk.TextToSpeech")
-    observable_config.add("operational", "1")
-    restart_config = JSON()
-    restart_config.add("window", "60")
-    restart_config.add("limit", "3")
-    observable_config.add("restart", restart_config)
-    observable_list.append(observable_config)
-
 if boolean("@PLUGIN_MONITOR_SYSTEMAUDIOPLAYER@"):
     observable_config = JSON()
     observable_config.add("callsign", "org.rdk.SystemAudioPlayer")
@@ -213,5 +205,56 @@ if boolean("@PLUGIN_MONITOR_CLONED_APPS@"):
     observable_config.add("memorylimit", "@PLUGIN_MONITOR_CLONED_APP_MEMORYLIMIT@")
     observable_list.append(observable_config)
 
-configuration.add("observables", observable_list)
+if "@PLUGIN_MONITOR_INSTANCES_LIST@":
+    __inst_list = "@PLUGIN_MONITOR_INSTANCES_LIST@".split()
+    for I in __inst_list:
+        if I == "":
+            continue
+        __elements = I.split(',')
+        if len(__elements) != 6:
+            print("Instance conf '{}': Must have 6 entries 'callsign,memoryinterval,memorylimit,operational,restartwindow,restartlimit', but has {} entries".format(I, len(__elements)))
+            exit(1)
+        __callsign = str(__elements[0])
+        if len(__callsign) == 0:
+            print("Instance conf '{}': Entry for 'callsign' must not be empty".format(I))
+            exit(1)
+        try:
+            __memoryinterval = int(__elements[1])
+        except ValueError:
+            print("Instance conf '{}': Entry for 'memoryinterval' must be an integer, but got '{}'".format(I, __elements[1]))
+            exit(1)
+        try:
+            __memorylimit = int(__elements[2])
+        except ValueError:
+            print("Instance conf '{}': Entry for 'memorylimit' must be an integer, but got '{}'".format(I, __elements[2]))
+            exit(1)
+        try:
+            __operational = int(__elements[3])
+        except ValueError:
+            print("Instance conf '{}': Entry for 'operational' must be an integer, but got '{}'".format(I, __elements[3]))
+            exit(1)
+        try:
+            __restartwindow = int(__elements[4])
+        except ValueError:
+            print("Instance conf '{}': Entry for 'restartwindow' must be an integer, but got '{}'".format(I, __elements[4]))
+            exit(1)
+        try:
+            __restartlimit = int(__elements[5])
+        except ValueError:
+            print("Instance conf '{}': Entry for 'restartlimit' must be an integer, but got '{}'".format(I, __elements[5]))
+            exit(1)
+        # All values are validated; make the configuration
+        observable_config = JSON()
+        observable_config.add("callsign", __callsign)
+        if __memoryinterval != 0:
+            observable_config.add("memory", __memoryinterval)
+            observable_config.add("memorylimit", __memorylimit)
+        observable_config.add("operational", __operational)
+        if __restartlimit != 0:
+            restart_config = JSON()
+            restart_config.add("window", __restartwindow)
+            restart_config.add("limit", __restartlimit)
+            observable_config.add("restart", restart_config)
+        observable_list.append(observable_config)
 
+configuration.add("observables", observable_list)

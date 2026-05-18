@@ -27,7 +27,9 @@
 #include <limits>
 #include <string>
 
+#if ENABLE_TELEMETRY_LOGGING
 #include <telemetry_busmessage_sender.h>
+#endif
 
 static uint32_t gcd(uint32_t a, uint32_t b)
 {
@@ -959,8 +961,9 @@ POP_WARNING()
                                 if (!callsign.empty() && reason &&
                                     std::string(callsign) == "JSPP" &&
                                     std::string(reason) == "Failure") {
-                                
+#if ENABLE_TELEMETRY_LOGGING
                                     t2_event_d("SYST_INFO_JSPPShutdown", 1);
+#endif
                                 }
 
                                 _service->Notify(message);
