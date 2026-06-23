@@ -15,14 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-project(Monitor)
-
-cmake_minimum_required(VERSION 3.3)
-
 find_package(WPEFramework)
 
 set(PLUGIN_NAME Monitor)
-set(MODULE_NAME ${NAMESPACE}${PROJECT_NAME})
+set(MODULE_NAME ${NAMESPACE}${PLUGIN_NAME})
+set(BUILD_REFERENCE "Developer-build" CACHE STRING "Thunder plugin build reference")
 
 set(PLUGIN_MONITOR_AUTOSTART "true" CACHE STRING "Automatically start Monitor plugin")
 set(PLUGIN_MONITOR_STARTUPORDER "" CACHE STRING "Automatically start Monitor plugin")
@@ -44,6 +41,8 @@ set(PLUGIN_MONITOR_NETFLIX OFF CACHE BOOL "Enable monitor for the Netflix plugin
 set(PLUGIN_MONITOR_OUTOFPROCESS OFF CACHE BOOL "Enable monitor for the OutOfProcess plugin")
 set(PLUGIN_MONITOR_TESTUTILITY OFF CACHE BOOL "Enable monitor for the TestUtility plugin")
 
+set(PLUGIN_MONITOR_INSTANCES_LIST "" CACHE STRING "Extra instances to monitor, as space-separated lists of (callsign,memory-interval,memory-limit,operational,restart-window,restart-limit)")
+
 # Options for each plugin
 set(PLUGIN_MONITOR_AMAZON_MEMORYLIMIT "614400" CACHE STRING "monitor amazon memory limit")
 set(PLUGIN_MONITOR_COBALT_MEMORYLIMIT "614400" CACHE STRING "monitor cobalt memory limit")
@@ -55,48 +54,37 @@ set(PLUGIN_MONITOR_WEBKITBROWSER_UX_MEMORYLIMIT "614400" CACHE STRING "monitor u
 set(PLUGIN_MONITOR_WEBKITBROWSER_YOUTUBE_MEMORYLIMIT "614400" CACHE STRING "monitor youtube memory limit")
 set(PLUGIN_MONITOR_NETWORKMANAGER_MEMORYLIMIT "614400" CACHE STRING "monitor networkmanager memory limit")
 
-# deprecated/legacy flags support
-if(PLUGIN_MONITOR_APPS_MEMORYLIMIT)
-    set(PLUGIN_MONITOR_WEBKITBROWSER_APPS_MEMORYLIMIT ${PLUGIN_MONITOR_APPS_MEMORYLIMIT} CACHE STRING "monitor apps memory limit" FORCE)
-    unset(PLUGIN_MONITOR_APPS_MEMORYLIMIT CACHE)
-endif()
-if(PLUGIN_MONITOR_RESIDENT_APP_MEMORYLIMIT)
-    set(PLUGIN_MONITOR_WEBKITBROWSER_RESIDENT_APP_MEMORYLIMIT ${PLUGIN_MONITOR_RESIDENT_APP_MEMORYLIMIT} CACHE STRING "monitor resident app memory limit" FORCE)
-    unset(PLUGIN_MONITOR_RESIDENT_APP_MEMORYLIMIT CACHE)
-endif()
-if(PLUGIN_MONITOR_UX_MEMORYLIMIT)
-    set(PLUGIN_MONITOR_WEBKITBROWSER_UX_MEMORYLIMIT ${PLUGIN_MONITOR_UX_MEMORYLIMIT} CACHE STRING "monitor ux memory limit" FORCE)
-    unset(PLUGIN_MONITOR_UX_MEMORYLIMIT CACHE)
-endif()
-if(PLUGIN_MONITOR_YOUTUBE_MEMORYLIMIT)
-    set(PLUGIN_MONITOR_WEBKITBROWSER_YOUTUBE_MEMORYLIMIT ${PLUGIN_MONITOR_YOUTUBE_MEMORYLIMIT} CACHE STRING "monitor youtube memory limit" FORCE)
-    unset(PLUGIN_MONITOR_YOUTUBE_MEMORYLIMIT CACHE)
-endif()
-
 find_package(${NAMESPACE}Plugins REQUIRED)
 find_package(CompileSettingsDebug CONFIG REQUIRED)
-find_package(Telemetry)
 
-add_library(${MODULE_NAME} SHARED 
+if(COMCAST_CONFIG)
+if(BUILD_ENABLE_TELEMETRY_LOGGING)
+    message("Building with telemetry logging")
+    find_package(Telemetry REQUIRED)
+endif()
+endif()
+
+add_library(${MODULE_NAME} SHARED
     Monitor.cpp
     MonitorJsonRpc.cpp
     Module.cpp)
 
 set_target_properties(${MODULE_NAME} PROPERTIES
-        CXX_STANDARD 11
+        CXX_STANDARD 17
         CXX_STANDARD_REQUIRED YES)
-
-target_link_libraries(${MODULE_NAME} 
+target_compile_definitions(${MODULE_NAME} PRIVATE BUILD_REFERENCE="${BUILD_REFERENCE}")
+target_link_libraries(${MODULE_NAME}
     PRIVATE
         CompileSettingsDebug::CompileSettingsDebug
         ${NAMESPACE}Plugins::${NAMESPACE}Plugins)
 
-install(TARGETS ${MODULE_NAME} 
+install(TARGETS ${MODULE_NAME}
     DESTINATION lib/${STORAGE_DIRECTORY}/plugins)
 
-if(TELEMETRY_FOUND)
-    target_link_libraries(${MODULE_NAME} PRIVATE ${TELEMETRY_LIBRARIES})
-    target_include_directories(${MODULE_NAME} PRIVATE ${TELEMETRY_INCLUDE_DIRS})
+if(Telemetry_FOUND)
+    target_compile_definitions(${MODULE_NAME} PRIVATE ENABLE_TELEMETRY_LOGGING)
+    target_link_libraries(${MODULE_NAME} PRIVATE ${Telemetry_LIBRARIES})
+    target_include_directories(${MODULE_NAME} PRIVATE ${Telemetry_INCLUDE_DIRS})
 endif()
 
-write_config(${PROJECT_NAME})
+write_config()
