@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-find_package(WPEFramework)
+find_package(Thunder REQUIRED)
 
 set(PLUGIN_NAME Monitor)
 set(MODULE_NAME ${NAMESPACE}${PLUGIN_NAME})
