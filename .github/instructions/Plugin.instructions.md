@@ -45,7 +45,7 @@ Thunder plugins require different service registration depending on whether they
 **REQUIRED**: Register using `Plugin::Metadata` template in the main plugin file (e.g., `PluginName.cpp`).
 
 ```cpp
-namespace WPEFramework {
+namespace Thunder {
     namespace {
         static Plugin::Metadata<Plugin::HdcpProfile> metadata(
             API_VERSION_NUMBER_MAJOR,
@@ -72,7 +72,7 @@ The plugin metadata can also contain additional information which is not mandato
 **REQUIRED**: Register using `SERVICE_REGISTRATION` macro in the implementation file (e.g., `PluginNameImplementation.cpp`).
 
 ```cpp
-namespace WPEFramework {
+namespace Thunder {
     namespace Plugin {
         SERVICE_REGISTRATION(HdcpProfile, API_VERSION_NUMBER_MAJOR, API_VERSION_NUMBER_MINOR, API_VERSION_NUMBER_PATCH);
     }

@@ -2,7 +2,7 @@
 
 ## Product Overview
 
-The Monitor plugin is a production-ready resource monitoring and management solution for WPEFramework (Thunder) based platforms. It provides comprehensive real-time visibility into plugin resource consumption, automatic failure recovery, and performance optimization capabilities for RDK-based devices including set-top boxes, smart TVs, and streaming devices.
+The Monitor plugin is a production-ready resource monitoring and management solution for Thunder based platforms. It provides comprehensive real-time visibility into plugin resource consumption, automatic failure recovery, and performance optimization capabilities for RDK-based devices including set-top boxes, smart TVs, and streaming devices.
 
 ## Key Features
 
@@ -206,7 +206,7 @@ PUT /Service/Monitor/Cobalt
 ## Integration Benefits
 
 ### For Platform Vendors
-- **Standards-Based**: Built on WPEFramework standard interfaces
+- **Standards-Based**: Built on Thunder standard interfaces
 - **Extensible**: Easy to add new monitoring metrics
 - **Configurable**: Per-plugin and per-platform customization
 - **Production-Ready**: Proven in commercial deployments
@@ -226,7 +226,7 @@ PUT /Service/Monitor/Cobalt
 ## Deployment Considerations
 
 ### System Requirements
-- WPEFramework (Thunder) R4.4 or later
+- Thunder R5_3 
 - Linux-based operating system
 - Sufficient system resources for monitoring overhead
 - Monitored plugins should implement IMemory interface (optional)
@@ -241,7 +241,7 @@ PUT /Service/Monitor/Cobalt
 - Optional security token validation
 - Read-only access to plugin statistics
 - Event-based architecture prevents direct memory access
-- Configurable access control through WPEFramework
+- Configurable access control through Thunder
 
 ### Maintenance
 - Automatic cleanup of old statistics
@@ -263,6 +263,6 @@ Fleet-wide monitoring enabled proactive maintenance, reducing mean time to resol
 ---
 
 **Product Version**: 1.1.0  
-**Platform**: WPEFramework (Thunder) R4.4+  
+**Platform**: Thunder R5_3  
 **License**: Apache 2.0  
 **Support**: RDK Central - entservices-maintainers

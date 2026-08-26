@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Monitor plugin is a WPEFramework (Thunder) plugin designed to track and monitor resource usage of other plugins running in the framework. It provides real-time memory and process statistics, restart limit management, and automatic recovery mechanisms for monitored plugins.
+The Monitor plugin is a Thunder plugin designed to track and monitor resource usage of other plugins running in the framework. It provides real-time memory and process statistics, restart limit management, and automatic recovery mechanisms for monitored plugins.
 
 ## System Architecture
 
@@ -10,7 +10,7 @@ The Monitor plugin is a WPEFramework (Thunder) plugin designed to track and moni
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│           WPEFramework (Thunder)                    │
+│                    Thunder                          │
 │  ┌───────────────────────────────────────────────┐  │
 │  │         Monitor Plugin (PluginHost)           │  │
 │  │  ┌─────────────────────────────────────────┐  │  │
@@ -102,7 +102,7 @@ The Monitor plugin is a WPEFramework (Thunder) plugin designed to track and moni
 
 ## Plugin Framework Integration
 
-### WPEFramework Interfaces
+### Thunder Interfaces
 
 #### IPlugin Interface
 - **Initialize()**: Plugin startup, configuration loading, observer setup
@@ -169,8 +169,8 @@ The Monitor plugin queries other plugins through the `IMemory` interface to coll
 ## Dependencies
 
 ### Framework Dependencies
-- **WPEFramework Core**: Base framework functionality
-- **WPEFramework Plugins**: Plugin subsystem
+- **Thunder Core**: Base framework functionality
+- **Thunder Plugins**: Plugin subsystem
 - **CompileSettingsDebug**: Debug configuration
 
 ### Interface Dependencies
@@ -195,5 +195,5 @@ The Monitor plugin queries other plugins through the `IMemory` interface to coll
 ---
 
 **Version**: 1.1.0  
-**API Compatibility**: Thunder R4.4+  
+**API Compatibility**: Thunder R5_3 
 **License**: Apache 2.0
