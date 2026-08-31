@@ -1070,7 +1070,7 @@ POP_WARNING()
     private:
         uint8_t _skipURL;
         Config _config;
-        Core::Sink<MonitorObjects> _monitor;
+        Core::SinkType<MonitorObjects> _monitor;
 
     private:
         void RegisterAll();
