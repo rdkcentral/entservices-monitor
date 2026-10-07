@@ -798,18 +798,17 @@ POP_WARNING()
                 } 
 
             }
-            void Deactivated (const string& callsign, PluginHost::IShell* service) override
+            void Deactivated (const string& callsign, PluginHost::IShell*) override
             {
+                if (callsign == _T("org.rdk.PowerManager")) {
+                    _parent.ReleasePowerManager();
+                }
             }
             void Initialize(const string& callsign, PluginHost::IShell* service) override
             {
             }
             void Deinitialized(const string& callsign, PluginHost::IShell* service) override
             {
-                if (callsign == _T("org.rdk.PowerManager")) {
-                    _parent.PowerManagerDeinitialized();
-                }
-
                 /* See comment in the Dispatch method on why no locking is here to protect the _monitor member */
                 MonitorObjectContainer::iterator index(_monitor.find(callsign));
 
@@ -1165,7 +1164,7 @@ POP_WARNING()
         void PowerModeChanged(const Exchange::IPowerManager::PowerState currentState,
                               const Exchange::IPowerManager::PowerState newState);
         void PowerManagerActivated(PluginHost::IShell* service);
-        void PowerManagerDeinitialized();
+        void ReleasePowerManager();
         void RegisterAll();
         void UnregisterAll();
         uint32_t endpoint_restartlimits(const JsonData::Monitor::RestartlimitsParamsData& params);

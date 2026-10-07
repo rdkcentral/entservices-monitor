@@ -68,7 +68,7 @@ namespace Plugin {
     /* virtual */ void Monitor::Deinitialize(PluginHost::IShell* service)
     {
         UnregisterAll();
-        PowerManagerDeinitialized();
+        ReleasePowerManager();
 
         service->Unregister(&_monitor);
 
@@ -102,7 +102,7 @@ namespace Plugin {
         TRACE(Trace::Warning, (_T("Failed to subscribe to PowerManager power mode notifications.")));
     }
 
-    void Monitor::PowerManagerDeinitialized()
+    void Monitor::ReleasePowerManager()
     {
         if (_powerManager != nullptr) {
             if (_registeredPowerModeChanged) {
@@ -122,13 +122,12 @@ namespace Plugin {
     }
 
     void Monitor::PowerModeChanged(
-        const Exchange::IPowerManager::PowerState currentState,
+        const Exchange::IPowerManager::PowerState,
         const Exchange::IPowerManager::PowerState newState)
     {
         if (newState == Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP) {
             _monitor.Pause();
-        } else if ((currentState == Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP) &&
-                   (newState == Exchange::IPowerManager::POWER_STATE_ON)) {
+        } else {
             _monitor.Resume();
         }
     }
