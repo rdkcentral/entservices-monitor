@@ -23,6 +23,7 @@
 
 #include "Module.h"
 #include <interfaces/IMemory.h>
+#include <interfaces/IPowerManager.h>
 #include <interfaces/json/JsonData_Monitor.h>
 #include <limits>
 #include <string>
@@ -676,6 +677,7 @@ PUSH_WARNING(DISABLE_WARNING_THIS_IN_MEMBER_INITIALIZER_LIST)
                 : _monitor()
                 , _job(*this)
                 , _service(nullptr)
+                , _paused(false)
                 , _parent(*parent)
             {
             }
@@ -749,13 +751,31 @@ POP_WARNING()
                 ASSERT(_service != nullptr);
 
                 _job.Revoke();
+                _paused.store(false);
 
                 _monitor.clear();
                 _service->Release();
                 _service = nullptr;
             }
+            void Pause()
+            {
+                _paused.store(true);
+                _job.Revoke();
+            }
+            void Resume()
+            {
+                if (_paused.load()) {
+                    Refresh();
+                    _paused.store(false);
+                    _job.Submit();
+                }
+            }
             void Activated (const string& callsign, PluginHost::IShell* service) override
             {
+                if (callsign == _T("org.rdk.PowerManager")) {
+                    _parent.PowerManagerActivated(service);
+                }
+
                 MonitorObjectContainer::iterator index(_monitor.find(callsign));
                 
 
@@ -771,7 +791,7 @@ POP_WARNING()
                         memory->Release();
                     }
 
-                    if (_job.Submit() == true) {
+                    if (!_paused.load() && (_job.Submit() == true)) {
                         TRACE(Trace::Information, (_T("Starting to probe as active observee appeared.")));
                     }
 
@@ -786,6 +806,10 @@ POP_WARNING()
             }
             void Deinitialized(const string& callsign, PluginHost::IShell* service) override
             {
+                if (callsign == _T("org.rdk.PowerManager")) {
+                    _parent.PowerManagerDeinitialized();
+                }
+
                 /* See comment in the Dispatch method on why no locking is here to protect the _monitor member */
                 MonitorObjectContainer::iterator index(_monitor.find(callsign));
 
@@ -796,7 +820,7 @@ POP_WARNING()
 
                     PluginHost::IShell::reason reason = service->Reason();
 
-                    if ((index->second.HasRestartAllowed() == true) && ((reason == PluginHost::IShell::MEMORY_EXCEEDED) || (reason == PluginHost::IShell::FAILURE))) {
+                    if (!_paused.load() && (index->second.HasRestartAllowed() == true) && ((reason == PluginHost::IShell::MEMORY_EXCEEDED) || (reason == PluginHost::IShell::FAILURE))) {
                         if (index->second.RegisterRestart(reason) == false) {
                             uint8_t restartlimit = index->second.RestartLimit();
                             uint16_t restartwindow = index->second.RestartWindow();
@@ -928,8 +952,33 @@ POP_WARNING()
         private:
             friend Core::ThreadPool::JobType<MonitorObjects&>;
 
+            void Refresh()
+            {
+                for (auto& observable : _monitor) {
+                    PluginHost::IShell* plugin = _service->QueryInterfaceByCallsign<PluginHost::IShell>(observable.first);
+                    if ((plugin != nullptr) && (plugin->State() == PluginHost::IShell::ACTIVATED)) {
+                        Exchange::IMemory* memory = plugin->QueryInterface<Exchange::IMemory>();
+                        observable.second.Set(memory);
+                        if (memory != nullptr) {
+                            memory->Release();
+                        }
+                        observable.second.Active(true);
+                    } else {
+                        observable.second.Set(nullptr);
+                        observable.second.Active(false);
+                    }
+                    if (plugin != nullptr) {
+                        plugin->Release();
+                    }
+                }
+            }
+
             void Dispatch()
             {
+                if (_paused.load()) {
+                    return;
+                }
+
                 uint64_t scheduledTime(Core::Time::Now().Ticks());
                 uint64_t nextSlot(static_cast<uint64_t>(~0));
 
@@ -937,6 +986,10 @@ POP_WARNING()
 
                 // Go through the list of pending observations...
                 while (index != _monitor.end()) {
+                    if (_paused.load()) {
+                        return;
+                    }
+
                     MonitorObject& info(index->second);
                     if (info.IsActive() == false) {
                         ++index;
@@ -985,6 +1038,10 @@ POP_WARNING()
                     index++;
                 }
 
+                if (_paused.load()) {
+                    return;
+                }
+
                 if (nextSlot != static_cast<uint64_t>(~0)) {
                     if (nextSlot < Core::Time::Now().Ticks()) {
                         _job.Submit();
@@ -1014,6 +1071,32 @@ POP_WARNING()
             MonitorObjectContainer _monitor;
             Core::WorkerPool::JobType<MonitorObjects&> _job;
             PluginHost::IShell* _service;
+            std::atomic<bool> _paused;
+            Monitor& _parent;
+        };
+
+        class PowerManagerNotification : public Exchange::IPowerManager::IModeChangedNotification {
+        public:
+            explicit PowerManagerNotification(Monitor& parent)
+                : _parent(parent)
+            {
+            }
+
+            void OnPowerModeChanged(const Exchange::IPowerManager::PowerState currentState,
+                                    const Exchange::IPowerManager::PowerState newState) override;
+
+            template <typename T>
+            T* baseInterface()
+            {
+                static_assert(std::is_base_of<T, PowerManagerNotification>(), "base type mismatch");
+                return static_cast<T*>(this);
+            }
+
+            BEGIN_INTERFACE_MAP(PowerManagerNotification)
+                INTERFACE_ENTRY(Exchange::IPowerManager::IModeChangedNotification)
+            END_INTERFACE_MAP
+
+        private:
             Monitor& _parent;
         };
 
@@ -1022,6 +1105,9 @@ PUSH_WARNING(DISABLE_WARNING_THIS_IN_MEMBER_INITIALIZER_LIST)
         Monitor()
             : _skipURL(0)
             , _monitor(this)
+            , _powerManager(nullptr)
+            , _powerManagerNotification(*this)
+            , _registeredPowerModeChanged(false)
         {
         }
 POP_WARNING()
@@ -1071,8 +1157,15 @@ POP_WARNING()
         uint8_t _skipURL;
         Config _config;
         Core::Sink<MonitorObjects> _monitor;
+        Exchange::IPowerManager* _powerManager;
+        Core::Sink<PowerManagerNotification> _powerManagerNotification;
+        bool _registeredPowerModeChanged;
 
     private:
+        void PowerModeChanged(const Exchange::IPowerManager::PowerState currentState,
+                              const Exchange::IPowerManager::PowerState newState);
+        void PowerManagerActivated(PluginHost::IShell* service);
+        void PowerManagerDeinitialized();
         void RegisterAll();
         void UnregisterAll();
         uint32_t endpoint_restartlimits(const JsonData::Monitor::RestartlimitsParamsData& params);
