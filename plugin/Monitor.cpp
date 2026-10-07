@@ -68,10 +68,68 @@ namespace Plugin {
     /* virtual */ void Monitor::Deinitialize(PluginHost::IShell* service)
     {
         UnregisterAll();
+        ReleasePowerManager();
 
         service->Unregister(&_monitor);
 
         _monitor.Close();
+    }
+
+    void Monitor::PowerManagerActivated(PluginHost::IShell* service)
+    {
+        if (_powerManager == nullptr) {
+            _powerManager = service->QueryInterface<Exchange::IPowerManager>();
+            if (_powerManager != nullptr) {
+                Core::hresult changedResult = _powerManager->Register(
+                    _powerManagerNotification.baseInterface<Exchange::IPowerManager::IModeChangedNotification>());
+                if (changedResult == Core::ERROR_NONE) {
+                    _registeredPowerModeChanged = true;
+                    Exchange::IPowerManager::PowerState currentState;
+                    Exchange::IPowerManager::PowerState previousState;
+                    if (_powerManager->GetPowerState(currentState, previousState) == Core::ERROR_NONE) {
+                        if (currentState == Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP) {
+                            _monitor.Pause();
+                        } else {
+                            _monitor.Resume();
+                        }
+                    }
+                    return;
+                }
+                _powerManager->Release();
+                _powerManager = nullptr;
+            }
+        }
+        TRACE(Trace::Warning, (_T("Failed to subscribe to PowerManager power mode notifications.")));
+    }
+
+    void Monitor::ReleasePowerManager()
+    {
+        if (_powerManager != nullptr) {
+            if (_registeredPowerModeChanged) {
+                _powerManager->Unregister(_powerManagerNotification.baseInterface<Exchange::IPowerManager::IModeChangedNotification>());
+                _registeredPowerModeChanged = false;
+            }
+            _powerManager->Release();
+            _powerManager = nullptr;
+        }
+    }
+
+    void Monitor::PowerManagerNotification::OnPowerModeChanged(
+        const Exchange::IPowerManager::PowerState currentState,
+        const Exchange::IPowerManager::PowerState newState)
+    {
+        _parent.PowerModeChanged(currentState, newState);
+    }
+
+    void Monitor::PowerModeChanged(
+        const Exchange::IPowerManager::PowerState,
+        const Exchange::IPowerManager::PowerState newState)
+    {
+        if (newState == Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP) {
+            _monitor.Pause();
+        } else {
+            _monitor.Resume();
+        }
     }
 
     /* virtual */ string Monitor::Information() const
