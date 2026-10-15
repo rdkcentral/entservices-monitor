@@ -19,6 +19,8 @@
  
 #include "Monitor.h"
 
+#include <cstdio>
+
 #define API_VERSION_NUMBER_MAJOR 1
 #define API_VERSION_NUMBER_MINOR 1
 #define API_VERSION_NUMBER_PATCH 0
@@ -87,8 +89,8 @@ namespace Plugin {
                     Exchange::IPowerManager::PowerState currentState;
                     Exchange::IPowerManager::PowerState previousState;
                     if (_powerManager->GetPowerState(currentState, previousState) == Core::ERROR_NONE) {
-                        SYSLOG(Logging::Information, (_T("[%s:%d] PowerManager initial power state: current [%d], previous [%d]."),
-                            __FUNCTION__, __LINE__, static_cast<int>(currentState), static_cast<int>(previousState)));
+                        std::printf("[%s:%d] PowerManager initial power state: current [%d], previous [%d].\n",
+                            __FUNCTION__, __LINE__, static_cast<int>(currentState), static_cast<int>(previousState));
                         if (currentState == Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP) {
                             _monitor.Pause();
                         } else {
@@ -127,14 +129,14 @@ namespace Plugin {
         const Exchange::IPowerManager::PowerState currentState,
         const Exchange::IPowerManager::PowerState newState)
     {
-        SYSLOG(Logging::Information, (_T("[%s:%d] PowerManager power state changed from [%d] to [%d]."),
-            __FUNCTION__, __LINE__, static_cast<int>(currentState), static_cast<int>(newState)));
+        std::printf("[%s:%d] PowerManager power state changed from [%d] to [%d].\n",
+            __FUNCTION__, __LINE__, static_cast<int>(currentState), static_cast<int>(newState));
 
         if (newState == Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP) {
-            SYSLOG(Logging::Information, (_T("[%s:%d] Pausing monitor in deep sleep."), __FUNCTION__, __LINE__));
+            std::printf("[%s:%d] Pausing monitor in deep sleep.\n", __FUNCTION__, __LINE__);
             _monitor.Pause();
         } else {
-            SYSLOG(Logging::Information, (_T("[%s:%d] Resuming monitor after power mode change."), __FUNCTION__, __LINE__));
+            std::printf("[%s:%d] Resuming monitor after power mode change.\n", __FUNCTION__, __LINE__);
             _monitor.Resume();
         }
     }
