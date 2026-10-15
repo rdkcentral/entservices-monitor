@@ -70,9 +70,9 @@ namespace Plugin {
     /* virtual */ void Monitor::Deinitialize(PluginHost::IShell* service)
     {
         UnregisterAll();
-        ReleasePowerManager();
-
         service->Unregister(&_monitor);
+
+        ReleasePowerManager();
 
         _monitor.Close();
     }
