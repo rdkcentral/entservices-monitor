@@ -87,8 +87,8 @@ namespace Plugin {
                     Exchange::IPowerManager::PowerState currentState;
                     Exchange::IPowerManager::PowerState previousState;
                     if (_powerManager->GetPowerState(currentState, previousState) == Core::ERROR_NONE) {
-                        LOGINFO("[%s:%d] PowerManager initial power state: current [%d], previous [%d].",
-                            __FUNCTION__, __LINE__, static_cast<int>(currentState), static_cast<int>(previousState));
+                        SYSLOG(Logging::Information, (_T("[%s:%d] PowerManager initial power state: current [%d], previous [%d]."),
+                            __FUNCTION__, __LINE__, static_cast<int>(currentState), static_cast<int>(previousState)));
                         if (currentState == Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP) {
                             _monitor.Pause();
                         } else {
@@ -127,14 +127,14 @@ namespace Plugin {
         const Exchange::IPowerManager::PowerState currentState,
         const Exchange::IPowerManager::PowerState newState)
     {
-        LOGINFO("[%s:%d] PowerManager power state changed from [%d] to [%d].",
-            __FUNCTION__, __LINE__, static_cast<int>(currentState), static_cast<int>(newState));
+        SYSLOG(Logging::Information, (_T("[%s:%d] PowerManager power state changed from [%d] to [%d]."),
+            __FUNCTION__, __LINE__, static_cast<int>(currentState), static_cast<int>(newState)));
 
         if (newState == Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP) {
-            LOGINFO("[%s:%d] Pausing monitor in deep sleep.", __FUNCTION__, __LINE__);
+            SYSLOG(Logging::Information, (_T("[%s:%d] Pausing monitor in deep sleep."), __FUNCTION__, __LINE__));
             _monitor.Pause();
         } else {
-            LOGINFO("[%s:%d] Resuming monitor after power mode change.", __FUNCTION__, __LINE__);
+            SYSLOG(Logging::Information, (_T("[%s:%d] Resuming monitor after power mode change."), __FUNCTION__, __LINE__));
             _monitor.Resume();
         }
     }
