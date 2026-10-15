@@ -495,6 +495,8 @@ namespace Plugin {
                     , _interval( ((operationalInterval != 0) || (_memoryInterval != 0)) ? gcd(_operationalInterval, _memoryInterval) : 0 )
                     , _active{ false }
                     , _adminLock()
+                    , _lifecycleLock()
+                    , _lifecycleGeneration(0)
                 {
                     ASSERT((_operationalInterval != 0) || (_memoryInterval != 0));
                 }
@@ -579,7 +581,35 @@ namespace Plugin {
                         _nextSlot += _interval;
                     }
                 }
-                inline void Set(Exchange::IMemory* memory)
+                inline uint64_t BeginLifecycleUpdate()
+                {
+                    Core::SafeSyncType<Core::CriticalSection> guard(_lifecycleLock);
+                    return (++_lifecycleGeneration);
+                }
+
+                inline bool SetLifecycleIfCurrent(
+                    Exchange::IMemory* memory,
+                    const bool active,
+                    const uint64_t generation)
+                {
+                    Core::SafeSyncType<Core::CriticalSection> guard(_lifecycleLock);
+                    if (generation != _lifecycleGeneration) {
+                        return false;
+                    }
+                    SetSource(memory);
+                    _active.store(active);
+                    return true;
+                }
+
+                inline void SetLifecycle(Exchange::IMemory* memory, const bool active)
+                {
+                    Core::SafeSyncType<Core::CriticalSection> guard(_lifecycleLock);
+                    ++_lifecycleGeneration;
+                    SetSource(memory);
+                    _active.store(active);
+                }
+
+                inline void SetSource(Exchange::IMemory* memory)
                 {
                     _adminLock.Lock();
                     if (_source != nullptr) {
@@ -592,7 +622,6 @@ namespace Plugin {
                         _source->AddRef();
                     }
                     _adminLock.Unlock();
-
                     _operational = (memory != nullptr);
                 }
 
@@ -666,6 +695,8 @@ namespace Plugin {
                 const uint32_t _interval; //!< The greatest possible interval to check both memory and processes.
                 std::atomic<bool> _active;
                 mutable Core::CriticalSection _adminLock;
+                mutable Core::CriticalSection _lifecycleLock;
+                uint64_t _lifecycleGeneration;
             };
 
         public:
@@ -780,14 +811,13 @@ POP_WARNING()
                 
 
                 if (index != _monitor.end()) {
-
-                    index->second.Active(true);
+                    const uint64_t lifecycleGeneration = index->second.BeginLifecycleUpdate();
 
                     // Get the MetaData interface
                     Exchange::IMemory* memory = service->QueryInterface<Exchange::IMemory>();
 
+                    index->second.SetLifecycleIfCurrent(memory, true, lifecycleGeneration);
                     if (memory != nullptr) {
-                        index->second.Set(memory);
                         memory->Release();
                     }
 
@@ -814,8 +844,7 @@ POP_WARNING()
 
                 if (index != _monitor.end()) {
 
-                    index->second.Set(nullptr);
-                    index->second.Active(false);
+                    index->second.SetLifecycle(nullptr, false);
 
                     PluginHost::IShell::reason reason = service->Reason();
 
@@ -954,17 +983,17 @@ POP_WARNING()
             void Refresh()
             {
                 for (auto& observable : _monitor) {
+                    const uint64_t lifecycleGeneration = observable.second.BeginLifecycleUpdate();
                     PluginHost::IShell* plugin = _service->QueryInterfaceByCallsign<PluginHost::IShell>(observable.first);
-                    if ((plugin != nullptr) && (plugin->State() == PluginHost::IShell::ACTIVATED)) {
+                    const bool active = (plugin != nullptr) && (plugin->State() == PluginHost::IShell::ACTIVATED);
+                    if (active) {
                         Exchange::IMemory* memory = plugin->QueryInterface<Exchange::IMemory>();
-                        observable.second.Set(memory);
+                        observable.second.SetLifecycleIfCurrent(memory, true, lifecycleGeneration);
                         if (memory != nullptr) {
                             memory->Release();
                         }
-                        observable.second.Active(true);
                     } else {
-                        observable.second.Set(nullptr);
-                        observable.second.Active(false);
+                        observable.second.SetLifecycleIfCurrent(nullptr, false, lifecycleGeneration);
                     }
                     if (plugin != nullptr) {
                         plugin->Release();
