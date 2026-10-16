@@ -649,7 +649,7 @@ namespace Plugin {
                             _operational = source->IsOperational();
                             if (_operational == false) {
                                 status |= NOT_OPERATIONAL;
-                                TRACE(Trace::Error, (_T("Status not operational. %d"), __LINE__));
+                                TRACE(Trace::Error, (_T("[%s] Status not operational. %d"), __FILE__, __LINE__));
                             }
                             _operationalSlots = _operationalInterval;
                         }
@@ -666,7 +666,7 @@ namespace Plugin {
 
                             if ((_memoryThreshold != 0) && (resident > _memoryThreshold)) {
                                 status |= EXCEEDED_MEMORY;
-                                TRACE(Trace::Error, (_T("Status MetaData Exceeded. %d"), __LINE__));
+                                TRACE(Trace::Error, (_T("[%s] Status MetaData Exceeded. %d"), __FILE__, __LINE__));
                             }
                             _memorySlots = _memoryInterval;
                         }
@@ -758,7 +758,7 @@ POP_WARNING()
                         restartWindow = element.Restart.Window;
                         restartLimit = element.Restart.Limit;
                     }
-                    SYSLOG(Logging::Startup, (_T("Monitoring: %s (%d,%d)."), callSign.c_str(), (interval / 1000000), (memory / 1000000)));
+                    SYSLOG(Logging::Startup, (_T("[%s] Monitoring: %s (%d,%d)."), __FILE__, callSign.c_str(), (interval / 1000000), (memory / 1000000)));
                     if ((interval != 0) || (memory != 0)) {
 
                         _monitor.emplace(std::piecewise_construct,
@@ -822,7 +822,7 @@ POP_WARNING()
                     }
 
                     if (!_paused.load() && (_job.Submit() == true)) {
-                        TRACE(Trace::Information, (_T("Starting to probe as active observee appeared.")));
+                        TRACE(Trace::Information, (_T("[%s] Starting to probe as active observee appeared."), __FILE__));
                     }
 
                 } 
@@ -852,7 +852,7 @@ POP_WARNING()
                         if (index->second.RegisterRestart(reason) == false) {
                             uint8_t restartlimit = index->second.RestartLimit();
                             uint16_t restartwindow = index->second.RestartWindow();
-                            TRACE(Trace::Fatal, (_T("Giving up restarting of %s: Failed more than %d times within %d seconds."), callsign.c_str(), restartlimit, restartwindow));
+                            TRACE(Trace::Fatal, (_T("[%s] Giving up restarting of %s: Failed more than %d times within %d seconds."), __FILE__, callsign.c_str(), restartlimit, restartwindow));
                             const string message("{\"callsign\": \"" + callsign + "\", \"action\": \"Restart\", \"reason\":\"" + (std::to_string(restartlimit)).c_str() + " Attempts Failed within the restart window\"}");
                             _service->Notify(message);
                             _parent.event_action(callsign, "StoppedRestaring", std::to_string(index->second.RestartLimit()) + " attempts failed within the restart window");
@@ -860,7 +860,7 @@ POP_WARNING()
                             const string message("{\"callsign\": \"" + callsign + "\", \"action\": \"Activate\", \"reason\": \"Automatic\" }");
                             _service->Notify(message);
                             _parent.event_action(callsign, "Activate", "Automatic");
-                            TRACE(Trace::Error, (_T("Restarting %s again because we detected it misbehaved."), callsign.c_str()));
+                            TRACE(Trace::Error, (_T("[%s] Restarting %s again because we detected it misbehaved."), __FILE__, callsign.c_str()));
                             Core::IWorkerPool::Instance().Submit(PluginHost::IShell::Job::Create(service, PluginHost::IShell::ACTIVATED, PluginHost::IShell::AUTOMATIC));
                         }
                     } 
@@ -1034,7 +1034,7 @@ POP_WARNING()
                                 Core::EnumerateType<PluginHost::IShell::reason> why(((value & MonitorObject::EXCEEDED_MEMORY) != 0) ? PluginHost::IShell::MEMORY_EXCEEDED : PluginHost::IShell::FAILURE);
 
                                 const string message("{\"callsign\": \"" + plugin->Callsign() + "\", \"action\": \"Deactivate\", \"reason\": \"" + why.Data() + "\" }");
-                                SYSLOG(Logging::Fatal, (_T("FORCED Shutdown: %s by reason: %s."), plugin->Callsign().c_str(), why.Data()));
+                                SYSLOG(Logging::Fatal, (_T("[%s] FORCED Shutdown: %s by reason: %s."), __FILE__, plugin->Callsign().c_str(), why.Data()));
 
                                 auto callsign = plugin->Callsign();
                                 auto reason   = why.Data();
@@ -1078,7 +1078,7 @@ POP_WARNING()
                         _job.Reschedule(nextSlot);
                     }
                 } else {
-                    TRACE(Trace::Information, (_T("Stopping to probe due to lack of active observees.")));
+                    TRACE(Trace::Information, (_T("[%s] Stopping to probe due to lack of active observees."), __FILE__));
                 }
             }
 

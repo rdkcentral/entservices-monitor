@@ -89,8 +89,8 @@ namespace Plugin {
                     Exchange::IPowerManager::PowerState currentState;
                     Exchange::IPowerManager::PowerState previousState;
                     if (_powerManager->GetPowerState(currentState, previousState) == Core::ERROR_NONE) {
-                        std::printf("[%s:%d] PowerManager initial power state: current [%d], previous [%d].\n",
-                            __FUNCTION__, __LINE__, static_cast<int>(currentState), static_cast<int>(previousState));
+                        std::printf("[%s:%s:%d] PowerManager initial power state: current [%d], previous [%d].\n",
+                            __FILE__, __FUNCTION__, __LINE__, static_cast<int>(currentState), static_cast<int>(previousState));
                         if (currentState == Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP) {
                             _monitor.Pause();
                         } else {
@@ -103,7 +103,7 @@ namespace Plugin {
                 _powerManager = nullptr;
             }
         }
-        TRACE(Trace::Warning, (_T("Failed to subscribe to PowerManager power mode notifications.")));
+        TRACE(Trace::Warning, (_T("[%s] Failed to subscribe to PowerManager power mode notifications."), __FILE__));
     }
 
     void Monitor::ReleasePowerManager()
@@ -129,14 +129,14 @@ namespace Plugin {
         const Exchange::IPowerManager::PowerState currentState,
         const Exchange::IPowerManager::PowerState newState)
     {
-        std::printf("[%s:%d] PowerManager power state changed from [%d] to [%d].\n",
-            __FUNCTION__, __LINE__, static_cast<int>(currentState), static_cast<int>(newState));
+        std::printf("[%s:%s:%d] PowerManager power state changed from [%d] to [%d].\n",
+            __FILE__, __FUNCTION__, __LINE__, static_cast<int>(currentState), static_cast<int>(newState));
 
         if (newState == Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP) {
-            std::printf("[%s:%d] Pausing monitor in deep sleep.\n", __FUNCTION__, __LINE__);
+            std::printf("[%s:%s:%d] Pausing monitor in deep sleep.\n", __FILE__, __FUNCTION__, __LINE__);
             _monitor.Pause();
         } else {
-            std::printf("[%s:%d] Resuming monitor after power mode change.\n", __FUNCTION__, __LINE__);
+            std::printf("[%s:%s:%d] Resuming monitor after power mode change.\n", __FILE__, __FUNCTION__, __LINE__);
             _monitor.Resume();
         }
     }
@@ -220,7 +220,7 @@ namespace Plugin {
                 restartWindow = body->Restart.Window;
                 restartLimit = body->Restart.Limit;
             }
-            TRACE(Trace::Information, (_T("Sets Restart Limits:[LIMIT:%d, WINDOW:%d]"), restartLimit, restartWindow));
+            TRACE(Trace::Information, (_T("[%s] Sets Restart Limits:[LIMIT:%d, WINDOW:%d]"), __FILE__, restartLimit, restartWindow));
             _monitor.Update(observable, restartWindow, restartLimit);
         } else {
             result->ErrorCode = Web::STATUS_BAD_REQUEST;
