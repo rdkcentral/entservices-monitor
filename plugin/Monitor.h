@@ -804,7 +804,7 @@ POP_WARNING()
             void Activated (const string& callsign, PluginHost::IShell* service) override
             {
                 if (callsign == _T("org.rdk.PowerManager")) {
-                    _parent.PowerManagerActivated(service);
+                    _parent.PowerManagerActivated();
                 }
 
                 MonitorObjectContainer::iterator index(_monitor.find(callsign));
@@ -831,7 +831,7 @@ POP_WARNING()
             void Deactivated (const string& callsign, PluginHost::IShell*) override
             {
                 if (callsign == _T("org.rdk.PowerManager")) {
-                    _parent.ReleasePowerManager();
+                    _parent.PowerManagerDeactivated();
                 }
             }
             void Initialize(const string& callsign, PluginHost::IShell* service) override
@@ -1133,6 +1133,7 @@ PUSH_WARNING(DISABLE_WARNING_THIS_IN_MEMBER_INITIALIZER_LIST)
         Monitor()
             : _skipURL(0)
             , _monitor(this)
+            , _service(nullptr)
             , _powerManager(nullptr)
             , _powerManagerNotification(*this)
             , _registeredPowerModeChanged(false)
@@ -1185,6 +1186,7 @@ POP_WARNING()
         uint8_t _skipURL;
         Config _config;
         Core::Sink<MonitorObjects> _monitor;
+        PluginHost::IShell* _service;
         Exchange::IPowerManager* _powerManager;
         Core::Sink<PowerManagerNotification> _powerManagerNotification;
         bool _registeredPowerModeChanged;
@@ -1192,7 +1194,9 @@ POP_WARNING()
     private:
         void PowerModeChanged(const Exchange::IPowerManager::PowerState currentState,
                               const Exchange::IPowerManager::PowerState newState);
-        void PowerManagerActivated(PluginHost::IShell* service);
+        void PowerManagerActivated();
+        void PowerManagerDeactivated();
+        void UnregisterPowerManagerNotification();
         void ReleasePowerManager();
         void RegisterAll();
         void UnregisterAll();

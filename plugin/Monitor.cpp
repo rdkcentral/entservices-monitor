@@ -51,6 +51,8 @@ namespace Plugin {
 
         _config.FromString(service->ConfigLine());
 
+        _service = service;
+
         _skipURL = static_cast<uint8_t>(service->WebPrefix().length());
 
         Core::JSON::ArrayType<Config::Entry>::Iterator index(_config.Observables.Elements());
@@ -72,15 +74,28 @@ namespace Plugin {
         UnregisterAll();
         service->Unregister(&_monitor);
 
+        UnregisterPowerManagerNotification();
         ReleasePowerManager();
 
         _monitor.Close();
+
+        _service = nullptr;
     }
 
-    void Monitor::PowerManagerActivated(PluginHost::IShell* service)
+    void Monitor::PowerManagerActivated()
     {
-        if (_powerManager == nullptr) {
-            _powerManager = service->QueryInterface<Exchange::IPowerManager>();
+        if (_registeredPowerModeChanged) {
+            return;
+        }
+
+        if (_powerManager != nullptr) {
+            // PowerManager was restarted; the reference held belongs to the previous instance.
+            ReleasePowerManager();
+        }
+
+        if (_service != nullptr) {
+            // Acquire through our own shell by callsign (same as XCast), not through the PowerManager's IShell.
+            _powerManager = _service->QueryInterfaceByCallsign<Exchange::IPowerManager>(_T("org.rdk.PowerManager"));
             if (_powerManager != nullptr) {
                 Core::hresult changedResult = _powerManager->Register(
                     _powerManagerNotification.baseInterface<Exchange::IPowerManager::IModeChangedNotification>());
@@ -99,20 +114,29 @@ namespace Plugin {
                     }
                     return;
                 }
-                _powerManager->Release();
-                _powerManager = nullptr;
             }
         }
         TRACE(Trace::Warning, (_T("[%s] Failed to subscribe to PowerManager power mode notifications."), __FILE__));
     }
 
+    void Monitor::PowerManagerDeactivated()
+    {
+        // Only drop our notification; the interface reference is kept until Monitor::Deinitialize (same as XCast),
+        // so we never release the PowerManager object while it is being torn down.
+        UnregisterPowerManagerNotification();
+    }
+
+    void Monitor::UnregisterPowerManagerNotification()
+    {
+        if ((_powerManager != nullptr) && _registeredPowerModeChanged) {
+            _powerManager->Unregister(_powerManagerNotification.baseInterface<Exchange::IPowerManager::IModeChangedNotification>());
+        }
+        _registeredPowerModeChanged = false;
+    }
+
     void Monitor::ReleasePowerManager()
     {
         if (_powerManager != nullptr) {
-            if (_registeredPowerModeChanged) {
-                _powerManager->Unregister(_powerManagerNotification.baseInterface<Exchange::IPowerManager::IModeChangedNotification>());
-                _registeredPowerModeChanged = false;
-            }
             _powerManager->Release();
             _powerManager = nullptr;
         }
