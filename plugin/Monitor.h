@@ -23,6 +23,7 @@
 
 #include "Module.h"
 #include <interfaces/IMemory.h>
+#include <interfaces/IPowerManager.h>
 #include <interfaces/json/JsonData_Monitor.h>
 #include <limits>
 #include <string>
@@ -494,6 +495,8 @@ namespace Plugin {
                     , _interval( ((operationalInterval != 0) || (_memoryInterval != 0)) ? gcd(_operationalInterval, _memoryInterval) : 0 )
                     , _active{ false }
                     , _adminLock()
+                    , _lifecycleLock()
+                    , _lifecycleGeneration(0)
                 {
                     ASSERT((_operationalInterval != 0) || (_memoryInterval != 0));
                 }
@@ -578,7 +581,35 @@ namespace Plugin {
                         _nextSlot += _interval;
                     }
                 }
-                inline void Set(Exchange::IMemory* memory)
+                inline uint64_t BeginLifecycleUpdate()
+                {
+                    Core::SafeSyncType<Core::CriticalSection> guard(_lifecycleLock);
+                    return (++_lifecycleGeneration);
+                }
+
+                inline bool SetLifecycleIfCurrent(
+                    Exchange::IMemory* memory,
+                    const bool active,
+                    const uint64_t generation)
+                {
+                    Core::SafeSyncType<Core::CriticalSection> guard(_lifecycleLock);
+                    if (generation != _lifecycleGeneration) {
+                        return false;
+                    }
+                    SetSource(memory);
+                    _active.store(active);
+                    return true;
+                }
+
+                inline void SetLifecycle(Exchange::IMemory* memory, const bool active)
+                {
+                    Core::SafeSyncType<Core::CriticalSection> guard(_lifecycleLock);
+                    ++_lifecycleGeneration;
+                    SetSource(memory);
+                    _active.store(active);
+                }
+
+                inline void SetSource(Exchange::IMemory* memory)
                 {
                     _adminLock.Lock();
                     if (_source != nullptr) {
@@ -591,7 +622,6 @@ namespace Plugin {
                         _source->AddRef();
                     }
                     _adminLock.Unlock();
-
                     _operational = (memory != nullptr);
                 }
 
@@ -619,7 +649,7 @@ namespace Plugin {
                             _operational = source->IsOperational();
                             if (_operational == false) {
                                 status |= NOT_OPERATIONAL;
-                                TRACE(Trace::Error, (_T("Status not operational. %d"), __LINE__));
+                                TRACE(Trace::Error, (_T("[%s] Status not operational. %d"), __FILE__, __LINE__));
                             }
                             _operationalSlots = _operationalInterval;
                         }
@@ -636,7 +666,7 @@ namespace Plugin {
 
                             if ((_memoryThreshold != 0) && (resident > _memoryThreshold)) {
                                 status |= EXCEEDED_MEMORY;
-                                TRACE(Trace::Error, (_T("Status MetaData Exceeded. %d"), __LINE__));
+                                TRACE(Trace::Error, (_T("[%s] Status MetaData Exceeded. %d"), __FILE__, __LINE__));
                             }
                             _memorySlots = _memoryInterval;
                         }
@@ -665,6 +695,8 @@ namespace Plugin {
                 const uint32_t _interval; //!< The greatest possible interval to check both memory and processes.
                 std::atomic<bool> _active;
                 mutable Core::CriticalSection _adminLock;
+                mutable Core::CriticalSection _lifecycleLock;
+                uint64_t _lifecycleGeneration;
             };
 
         public:
@@ -676,6 +708,7 @@ PUSH_WARNING(DISABLE_WARNING_THIS_IN_MEMBER_INITIALIZER_LIST)
                 : _monitor()
                 , _job(*this)
                 , _service(nullptr)
+                , _paused(false)
                 , _parent(*parent)
             {
             }
@@ -725,7 +758,7 @@ POP_WARNING()
                         restartWindow = element.Restart.Window;
                         restartLimit = element.Restart.Limit;
                     }
-                    SYSLOG(Logging::Startup, (_T("Monitoring: %s (%d,%d)."), callSign.c_str(), (interval / 1000000), (memory / 1000000)));
+                    SYSLOG(Logging::Startup, (_T("[%s] Monitoring: %s (%d,%d)."), __FILE__, callSign.c_str(), (interval / 1000000), (memory / 1000000)));
                     if ((interval != 0) || (memory != 0)) {
 
                         _monitor.emplace(std::piecewise_construct,
@@ -749,37 +782,57 @@ POP_WARNING()
                 ASSERT(_service != nullptr);
 
                 _job.Revoke();
+                _paused.store(false);
 
                 _monitor.clear();
                 _service->Release();
                 _service = nullptr;
             }
+            void Pause()
+            {
+                _paused.store(true);
+                _job.Revoke();
+            }
+            void Resume()
+            {
+                if (_paused.load()) {
+                    Refresh();
+                    _paused.store(false);
+                    _job.Submit();
+                }
+            }
             void Activated (const string& callsign, PluginHost::IShell* service) override
             {
+                if (callsign == _T("org.rdk.PowerManager")) {
+                    _parent.PowerManagerActivated();
+                }
+
                 MonitorObjectContainer::iterator index(_monitor.find(callsign));
                 
 
                 if (index != _monitor.end()) {
-
-                    index->second.Active(true);
+                    const uint64_t lifecycleGeneration = index->second.BeginLifecycleUpdate();
 
                     // Get the MetaData interface
                     Exchange::IMemory* memory = service->QueryInterface<Exchange::IMemory>();
 
+                    index->second.SetLifecycleIfCurrent(memory, true, lifecycleGeneration);
                     if (memory != nullptr) {
-                        index->second.Set(memory);
                         memory->Release();
                     }
 
-                    if (_job.Submit() == true) {
-                        TRACE(Trace::Information, (_T("Starting to probe as active observee appeared.")));
+                    if (!_paused.load() && (_job.Submit() == true)) {
+                        TRACE(Trace::Information, (_T("[%s] Starting to probe as active observee appeared."), __FILE__));
                     }
 
                 } 
 
             }
-            void Deactivated (const string& callsign, PluginHost::IShell* service) override
+            void Deactivated (const string& callsign, PluginHost::IShell*) override
             {
+                if (callsign == _T("org.rdk.PowerManager")) {
+                    _parent.PowerManagerDeactivated();
+                }
             }
             void Initialize(const string& callsign, PluginHost::IShell* service) override
             {
@@ -791,16 +844,15 @@ POP_WARNING()
 
                 if (index != _monitor.end()) {
 
-                    index->second.Set(nullptr);
-                    index->second.Active(false);
+                    index->second.SetLifecycle(nullptr, false);
 
                     PluginHost::IShell::reason reason = service->Reason();
 
-                    if ((index->second.HasRestartAllowed() == true) && ((reason == PluginHost::IShell::MEMORY_EXCEEDED) || (reason == PluginHost::IShell::FAILURE))) {
+                    if (!_paused.load() && (index->second.HasRestartAllowed() == true) && ((reason == PluginHost::IShell::MEMORY_EXCEEDED) || (reason == PluginHost::IShell::FAILURE))) {
                         if (index->second.RegisterRestart(reason) == false) {
                             uint8_t restartlimit = index->second.RestartLimit();
                             uint16_t restartwindow = index->second.RestartWindow();
-                            TRACE(Trace::Fatal, (_T("Giving up restarting of %s: Failed more than %d times within %d seconds."), callsign.c_str(), restartlimit, restartwindow));
+                            TRACE(Trace::Fatal, (_T("[%s] Giving up restarting of %s: Failed more than %d times within %d seconds."), __FILE__, callsign.c_str(), restartlimit, restartwindow));
                             const string message("{\"callsign\": \"" + callsign + "\", \"action\": \"Restart\", \"reason\":\"" + (std::to_string(restartlimit)).c_str() + " Attempts Failed within the restart window\"}");
                             _service->Notify(message);
                             _parent.event_action(callsign, "StoppedRestaring", std::to_string(index->second.RestartLimit()) + " attempts failed within the restart window");
@@ -808,7 +860,7 @@ POP_WARNING()
                             const string message("{\"callsign\": \"" + callsign + "\", \"action\": \"Activate\", \"reason\": \"Automatic\" }");
                             _service->Notify(message);
                             _parent.event_action(callsign, "Activate", "Automatic");
-                            TRACE(Trace::Error, (_T("Restarting %s again because we detected it misbehaved."), callsign.c_str()));
+                            TRACE(Trace::Error, (_T("[%s] Restarting %s again because we detected it misbehaved."), __FILE__, callsign.c_str()));
                             Core::IWorkerPool::Instance().Submit(PluginHost::IShell::Job::Create(service, PluginHost::IShell::ACTIVATED, PluginHost::IShell::AUTOMATIC));
                         }
                     } 
@@ -928,8 +980,33 @@ POP_WARNING()
         private:
             friend Core::ThreadPool::JobType<MonitorObjects&>;
 
+            void Refresh()
+            {
+                for (auto& observable : _monitor) {
+                    const uint64_t lifecycleGeneration = observable.second.BeginLifecycleUpdate();
+                    PluginHost::IShell* plugin = _service->QueryInterfaceByCallsign<PluginHost::IShell>(observable.first);
+                    const bool active = (plugin != nullptr) && (plugin->State() == PluginHost::IShell::ACTIVATED);
+                    if (active) {
+                        Exchange::IMemory* memory = plugin->QueryInterface<Exchange::IMemory>();
+                        observable.second.SetLifecycleIfCurrent(memory, true, lifecycleGeneration);
+                        if (memory != nullptr) {
+                            memory->Release();
+                        }
+                    } else {
+                        observable.second.SetLifecycleIfCurrent(nullptr, false, lifecycleGeneration);
+                    }
+                    if (plugin != nullptr) {
+                        plugin->Release();
+                    }
+                }
+            }
+
             void Dispatch()
             {
+                if (_paused.load()) {
+                    return;
+                }
+
                 uint64_t scheduledTime(Core::Time::Now().Ticks());
                 uint64_t nextSlot(static_cast<uint64_t>(~0));
 
@@ -937,6 +1014,10 @@ POP_WARNING()
 
                 // Go through the list of pending observations...
                 while (index != _monitor.end()) {
+                    if (_paused.load()) {
+                        return;
+                    }
+
                     MonitorObject& info(index->second);
                     if (info.IsActive() == false) {
                         ++index;
@@ -953,7 +1034,7 @@ POP_WARNING()
                                 Core::EnumerateType<PluginHost::IShell::reason> why(((value & MonitorObject::EXCEEDED_MEMORY) != 0) ? PluginHost::IShell::MEMORY_EXCEEDED : PluginHost::IShell::FAILURE);
 
                                 const string message("{\"callsign\": \"" + plugin->Callsign() + "\", \"action\": \"Deactivate\", \"reason\": \"" + why.Data() + "\" }");
-                                SYSLOG(Logging::Fatal, (_T("FORCED Shutdown: %s by reason: %s."), plugin->Callsign().c_str(), why.Data()));
+                                SYSLOG(Logging::Fatal, (_T("[%s] FORCED Shutdown: %s by reason: %s."), __FILE__, plugin->Callsign().c_str(), why.Data()));
 
                                 auto callsign = plugin->Callsign();
                                 auto reason   = why.Data();
@@ -985,6 +1066,10 @@ POP_WARNING()
                     index++;
                 }
 
+                if (_paused.load()) {
+                    return;
+                }
+
                 if (nextSlot != static_cast<uint64_t>(~0)) {
                     if (nextSlot < Core::Time::Now().Ticks()) {
                         _job.Submit();
@@ -993,7 +1078,7 @@ POP_WARNING()
                         _job.Reschedule(nextSlot);
                     }
                 } else {
-                    TRACE(Trace::Information, (_T("Stopping to probe due to lack of active observees.")));
+                    TRACE(Trace::Information, (_T("[%s] Stopping to probe due to lack of active observees."), __FILE__));
                 }
             }
 
@@ -1014,6 +1099,32 @@ POP_WARNING()
             MonitorObjectContainer _monitor;
             Core::WorkerPool::JobType<MonitorObjects&> _job;
             PluginHost::IShell* _service;
+            std::atomic<bool> _paused;
+            Monitor& _parent;
+        };
+
+        class PowerManagerNotification : public Exchange::IPowerManager::IModeChangedNotification {
+        public:
+            explicit PowerManagerNotification(Monitor& parent)
+                : _parent(parent)
+            {
+            }
+
+            void OnPowerModeChanged(const Exchange::IPowerManager::PowerState currentState,
+                                    const Exchange::IPowerManager::PowerState newState) override;
+
+            template <typename T>
+            T* baseInterface()
+            {
+                static_assert(std::is_base_of<T, PowerManagerNotification>(), "base type mismatch");
+                return static_cast<T*>(this);
+            }
+
+            BEGIN_INTERFACE_MAP(PowerManagerNotification)
+                INTERFACE_ENTRY(Exchange::IPowerManager::IModeChangedNotification)
+            END_INTERFACE_MAP
+
+        private:
             Monitor& _parent;
         };
 
@@ -1022,6 +1133,10 @@ PUSH_WARNING(DISABLE_WARNING_THIS_IN_MEMBER_INITIALIZER_LIST)
         Monitor()
             : _skipURL(0)
             , _monitor(this)
+            , _service(nullptr)
+            , _powerManager(nullptr)
+            , _powerManagerNotification(*this)
+            , _registeredPowerModeChanged(false)
         {
         }
 POP_WARNING()
@@ -1071,8 +1186,18 @@ POP_WARNING()
         uint8_t _skipURL;
         Config _config;
         Core::Sink<MonitorObjects> _monitor;
+        PluginHost::IShell* _service;
+        Exchange::IPowerManager* _powerManager;
+        Core::Sink<PowerManagerNotification> _powerManagerNotification;
+        bool _registeredPowerModeChanged;
 
     private:
+        void PowerModeChanged(const Exchange::IPowerManager::PowerState currentState,
+                              const Exchange::IPowerManager::PowerState newState);
+        void PowerManagerActivated();
+        void PowerManagerDeactivated();
+        void UnregisterPowerManagerNotification();
+        void ReleasePowerManager();
         void RegisterAll();
         void UnregisterAll();
         uint32_t endpoint_restartlimits(const JsonData::Monitor::RestartlimitsParamsData& params);

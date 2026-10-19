@@ -19,6 +19,8 @@
  
 #include "Monitor.h"
 
+#include <cstdio>
+
 #define API_VERSION_NUMBER_MAJOR 1
 #define API_VERSION_NUMBER_MINOR 1
 #define API_VERSION_NUMBER_PATCH 0
@@ -49,6 +51,8 @@ namespace Plugin {
 
         _config.FromString(service->ConfigLine());
 
+        _service = service;
+
         _skipURL = static_cast<uint8_t>(service->WebPrefix().length());
 
         Core::JSON::ArrayType<Config::Entry>::Iterator index(_config.Observables.Elements());
@@ -68,10 +72,97 @@ namespace Plugin {
     /* virtual */ void Monitor::Deinitialize(PluginHost::IShell* service)
     {
         UnregisterAll();
-
         service->Unregister(&_monitor);
 
+        UnregisterPowerManagerNotification();
+        ReleasePowerManager();
+
         _monitor.Close();
+
+        _service = nullptr;
+    }
+
+    void Monitor::PowerManagerActivated()
+    {
+        if (_registeredPowerModeChanged) {
+            return;
+        }
+
+        if (_powerManager != nullptr) {
+            // PowerManager was restarted; the reference held belongs to the previous instance.
+            ReleasePowerManager();
+        }
+
+        if (_service != nullptr) {
+            // Acquire through our own shell by callsign (same as XCast), not through the PowerManager's IShell.
+            _powerManager = _service->QueryInterfaceByCallsign<Exchange::IPowerManager>(_T("org.rdk.PowerManager"));
+            if (_powerManager != nullptr) {
+                Core::hresult changedResult = _powerManager->Register(
+                    _powerManagerNotification.baseInterface<Exchange::IPowerManager::IModeChangedNotification>());
+                if (changedResult == Core::ERROR_NONE) {
+                    _registeredPowerModeChanged = true;
+                    Exchange::IPowerManager::PowerState currentState;
+                    Exchange::IPowerManager::PowerState previousState;
+                    if (_powerManager->GetPowerState(currentState, previousState) == Core::ERROR_NONE) {
+                        std::printf("[%s:%s:%d] PowerManager initial power state: current [%d], previous [%d].\n",
+                            __FILE__, __FUNCTION__, __LINE__, static_cast<int>(currentState), static_cast<int>(previousState));
+                        if (currentState == Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP) {
+                            _monitor.Pause();
+                        } else {
+                            _monitor.Resume();
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+        TRACE(Trace::Warning, (_T("[%s] Failed to subscribe to PowerManager power mode notifications."), __FILE__));
+    }
+
+    void Monitor::PowerManagerDeactivated()
+    {
+        // Only drop our notification; the interface reference is kept until Monitor::Deinitialize (same as XCast),
+        // so we never release the PowerManager object while it is being torn down.
+        UnregisterPowerManagerNotification();
+    }
+
+    void Monitor::UnregisterPowerManagerNotification()
+    {
+        if ((_powerManager != nullptr) && _registeredPowerModeChanged) {
+            _powerManager->Unregister(_powerManagerNotification.baseInterface<Exchange::IPowerManager::IModeChangedNotification>());
+        }
+        _registeredPowerModeChanged = false;
+    }
+
+    void Monitor::ReleasePowerManager()
+    {
+        if (_powerManager != nullptr) {
+            _powerManager->Release();
+            _powerManager = nullptr;
+        }
+    }
+
+    void Monitor::PowerManagerNotification::OnPowerModeChanged(
+        const Exchange::IPowerManager::PowerState currentState,
+        const Exchange::IPowerManager::PowerState newState)
+    {
+        _parent.PowerModeChanged(currentState, newState);
+    }
+
+    void Monitor::PowerModeChanged(
+        const Exchange::IPowerManager::PowerState currentState,
+        const Exchange::IPowerManager::PowerState newState)
+    {
+        std::printf("[%s:%s:%d] PowerManager power state changed from [%d] to [%d].\n",
+            __FILE__, __FUNCTION__, __LINE__, static_cast<int>(currentState), static_cast<int>(newState));
+
+        if (newState == Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP) {
+            std::printf("[%s:%s:%d] Pausing monitor in deep sleep.\n", __FILE__, __FUNCTION__, __LINE__);
+            _monitor.Pause();
+        } else {
+            std::printf("[%s:%s:%d] Resuming monitor after power mode change.\n", __FILE__, __FUNCTION__, __LINE__);
+            _monitor.Resume();
+        }
     }
 
     /* virtual */ string Monitor::Information() const
@@ -153,7 +244,7 @@ namespace Plugin {
                 restartWindow = body->Restart.Window;
                 restartLimit = body->Restart.Limit;
             }
-            TRACE(Trace::Information, (_T("Sets Restart Limits:[LIMIT:%d, WINDOW:%d]"), restartLimit, restartWindow));
+            TRACE(Trace::Information, (_T("[%s] Sets Restart Limits:[LIMIT:%d, WINDOW:%d]"), __FILE__, restartLimit, restartWindow));
             _monitor.Update(observable, restartWindow, restartLimit);
         } else {
             result->ErrorCode = Web::STATUS_BAD_REQUEST;
