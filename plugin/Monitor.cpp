@@ -159,7 +159,8 @@ namespace Plugin {
         if (newState == Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP) {
             std::printf("[%s:%s:%d] Pausing monitor in deep sleep.\n", __FILE__, __FUNCTION__, __LINE__);
             _monitor.Pause();
-        } else {
+        } else if ((currentState == Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP)
+            && (newState != Exchange::IPowerManager::POWER_STATE_STANDBY_DEEP_SLEEP)) {
             std::printf("[%s:%s:%d] Resuming monitor after power mode change.\n", __FILE__, __FUNCTION__, __LINE__);
             _monitor.Resume();
         }
